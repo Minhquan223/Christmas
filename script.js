@@ -183,7 +183,9 @@ function startStory() {
     // Scene 2
     storyTimeline.to("#scene-2", { autoAlpha: 1, scale: 1, duration: 1.5 })
                  .to("#scene-2", { autoAlpha: 0, y: -20, filter: "blur(10px)", duration: 1.5, delay: 2.5 });
-
+    // Scene 2-5
+    storyTimeline.to("#scene-2-5", { autoAlpha: 1, scale: 1, duration: 1.5 })
+                 .to("#scene-2-5", { autoAlpha: 0, y: -20, filter: "blur(10px)", duration: 1.5, delay: 2.5 });
     // Scene 3
     storyTimeline.to("#scene-3", { autoAlpha: 1, scale: 1, duration: 1.5 })
                  .to("#scene-3", { autoAlpha: 0, duration: 1, delay: 2.5 }) 
