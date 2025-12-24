@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Christmas Memories | 3D Cinematic Experience</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Great+Vibes&family=Montserrat:wght@300;500&display=swap" rel="stylesheet">
+
+    <style>
+        /* --- CSS RESET & BASE --- */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            overflow: hidden; 
+            background-color: #020205; /* Màu nền đen xanh cực sâu */
+            font-family: 'Montserrat', sans-serif;
+            color: #fff;
+        }
+
+        /* Canvas 3D */
+        #canvas-container {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 1;
+            opacity: 0; /* Ẩn đi đợi JS load xong mới hiện */
+            transition: opacity 2s ease;
+        }
+
+        /* --- UI OVERLAY --- */
+        #ui-layer {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 10; pointer-events: none;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+        }
+
+        /* Start Screen (Khắc phục lỗi không chạy) */
+        #start-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 999;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            cursor: pointer;
+            transition: opacity 1s;
+        }
+        .start-btn {
+            border: 1px solid rgba(255,255,255,0.3);
+            padding: 15px 40px; color: #fff; text-transform: uppercase;
+            letter-spacing: 4px; font-family: 'Cinzel', serif;
+            background: radial-gradient(circle, rgba(255,255,255,0.1), transparent);
+            transition: all 0.3s;
+            pointer-events: auto; /* Để click được */
+        }
+        .start-btn:hover { background: rgba(255,255,255,0.2); box-shadow: 0 0 20px rgba(255,105,180,0.4); }
+
+        /* Typography Animation */
+        .text-slide {
+            position: absolute; text-align: center; width: 90%; max-width: 800px;
+            opacity: 0; /* Mặc định ẩn */
+        }
+        .title-font {
+            font-family: 'Great Vibes', cursive;
+            font-size: clamp(3rem, 8vw, 6rem);
+            color: #ff9de9;
+            text-shadow: 0 0 30px rgba(255, 157, 233, 0.5);
+            margin-bottom: 10px;
+        }
+        .sub-font {
+            font-family: 'Cinzel', serif;
+            font-size: clamp(1rem, 3vw, 1.4rem);
+            letter-spacing: 3px; color: #ccdbfd;
+        }
+
+        /* Image Card */
+        .memory-card {
+            position: absolute; opacity: 0;
+            background: rgba(255,255,255,0.03);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            padding: 15px; border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 0 40px rgba(255,0,128,0.15);
+            transform: scale(0.9);
+            pointer-events: auto;
+        }
+        .memory-card img {
+            max-width: 100%; width: 300px; border-radius: 8px; display: block;
+        }
+        
+        /* Hiệu ứng mờ ảo (Vignette + Grain) */
+        .overlay-fx {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, transparent 40%, #000 140%);
+            pointer-events: none; z-index: 5;
+        }
+    </style>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+                "gsap": "https://unpkg.com/gsap@3.12.5/index.js"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <div id="start-screen">
+        <div class="start-btn">Click to Start</div>
+        <p style="margin-top:15px; font-size: 0.8rem; color: #666;">Tai nghe khuyến nghị</p>
+    </div>
+
+    <div class="overlay-fx"></div>
+
+    <div id="ui-layer">
+        <div class="text-slide" id="slide1">
+            <h1 class="title-font">Merry Christmas</h1>
+            <p class="sub-font">Gửi đến người con gái anh yêu</p>
+        </div>
+        <div class="text-slide" id="slide2">
+            <p class="sub-font" style="line-height: 1.8;">
+                "Giáng sinh năm nay, tuy mình không ở cạnh nhau..."
+            </p>
+        </div>
+        <div class="text-slide" id="slide3">
+            <h1 class="title-font" style="color: #fff;">Mãi Yêu Em</h1>
+            <p class="sub-font">Chúc em thật hạnh phúc</p>
+        </div>
+        <div class="memory-card" id="imgCard">
+            <img src="https://images.unsplash.com/photo-1543589077-47d81606c1bf?q=80&w=1974&auto=format&fit=crop" alt="Memory">
+            <div style="margin-top:10px; text-align:center; font-size:0.8rem; color:#ff9de9;">Our Moments</div>
+        </div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        // --- CẤU HÌNH ---
+        const CONFIG = {
+            bloomStrength: 1.8,  // Độ sáng rực (Glow)
+            bloomRadius: 0.5,
+            particleCount: 3000, // Số lượng hạt
+            colorCore: '#ff0080', // Màu lõi (Hồng đậm)
+            colorEdge: '#ffccf2'  // Màu viền (Hồng phấn)
+        };
+
+        // --- INIT SCENE ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x020205, 0.0015); // Sương mù
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 2, 12); // Vị trí ban đầu
+
+        const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Tối ưu cho mobile
+        renderer.toneMapping = THREE.ReinhardToneMapping;
+        container.appendChild(renderer.domElement);
+
+        // --- POST PROCESSING (BLOOM) ---
+        const composer = new THREE.EffectComposer(renderer);
+        const renderPass = new THREE.RenderPass(scene, camera);
+        composer.addPass(renderPass);
+
+        const bloomPass = new THREE.UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            CONFIG.bloomStrength, CONFIG.bloomRadius, 0.85
+        );
+        composer.addPass(bloomPass);
+
+        // --- TEXTURE GEN (Tự tạo texture tròn mờ để không bị lỗi load ảnh) ---
+        function getTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 32; canvas.height = 32;
+            const ctx = canvas.getContext('2d');
+            const g = ctx.createRadialGradient(16,16,0,16,16,16);
+            g.addColorStop(0, 'rgba(255,255,255,1)');
+            g.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = g;
+            ctx.fillRect(0,0,32,32);
+            const tex = new THREE.Texture(canvas);
+            tex.needsUpdate = true;
+            return tex;
+        }
+        const particleImg = getTexture();
+
+        // --- OBJECT: THE MAGICAL TREE ---
+        const treeGeo = new THREE.BufferGeometry();
+        const posArray = [];
+        const colorArray = [];
+        const sizeArray = [];
+
+        const c1 = new THREE.Color(CONFIG.colorCore);
+        const c2 = new THREE.Color(CONFIG.colorEdge);
+
+        for(let i=0; i<CONFIG.particleCount; i++) {
+            // Toán học đường xoắn ốc (Spiral)
+            const angle = i * 0.1; 
+            const radius = 4 * (1 - i/CONFIG.particleCount); // Nhỏ dần lên đỉnh
+            const y = (i/CONFIG.particleCount) * 10 - 5;
+            
+            // Random hóa vị trí một chút để tự nhiên
+            const x = Math.cos(angle) * radius + (Math.random()-0.5)*0.5;
+            const z = Math.sin(angle) * radius + (Math.random()-0.5)*0.5;
+
+            posArray.push(x, y, z);
+
+            // Màu sắc
+            const mixColor = c1.clone().lerp(c2, Math.random());
+            colorArray.push(mixColor.r, mixColor.g, mixColor.b);
+            
+            // Kích thước ngẫu nhiên
+            sizeArray.push(Math.random() * 2.5); 
+        }
+
+        treeGeo.setAttribute('position', new THREE.Float32BufferAttribute(posArray, 3));
+        treeGeo.setAttribute('color', new THREE.Float32BufferAttribute(colorArray, 3));
+        treeGeo.setAttribute('size', new THREE.Float32BufferAttribute(sizeArray, 1));
+
+        const treeMat = new THREE.PointsMaterial({
+            size: 0.2, vertexColors: true, map: particleImg,
+            blending: THREE.AdditiveBlending, depthWrite: false, transparent: true
+        });
+        const tree = new THREE.Points(treeGeo, treeMat);
+        scene.add(tree);
+
+        // --- OBJECT: FALLING SNOW ---
+        const snowGeo = new THREE.BufferGeometry();
+        const snowPos = [];
+        for(let i=0; i<800; i++) {
+            snowPos.push((Math.random()-0.5)*30, (Math.random()-0.5)*30, (Math.random()-0.5)*30);
+        }
+        snowGeo.setAttribute('position', new THREE.Float32BufferAttribute(snowPos, 3));
+        const snowMat = new THREE.PointsMaterial({
+            size: 0.1, color: 0xffffff, map: particleImg, 
+            transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false
+        });
+        const snow = new THREE.Points(snowGeo, snowMat);
+        scene.add(snow);
+
+        // --- ANIMATION LOOP ---
+        const clock = new THREE.Clock();
+        let mouseX = 0;
+        let mouseY = 0;
+
+        // Tương tác chuột / Cảm ứng
+        const onMove = (e) => {
+            const x = e.clientX || e.touches[0].clientX;
+            const y = e.clientY || e.touches[0].clientY;
+            mouseX = (x / window.innerWidth) - 0.5;
+            mouseY = (y / window.innerHeight) - 0.5;
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('touchmove', onMove);
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const t = clock.getElapsedTime();
+
+            // Cây xoay nhẹ
+            tree.rotation.y = -t * 0.1;
+            
+            // Tuyết rơi
+            const positions = snow.geometry.attributes.position.array;
+            for(let i=1; i<positions.length; i+=3) {
+                positions[i] -= 0.03; // Rơi xuống
+                if(positions[i] < -15) positions[i] = 15; // Reset lên đỉnh
+            }
+            snow.geometry.attributes.position.needsUpdate = true;
+            snow.rotation.y = t * 0.05;
+
+            // Camera lắc lư theo chuột (Parallax)
+            camera.position.x += (mouseX * 3 - camera.position.x) * 0.05;
+            camera.position.y += (-mouseY * 1 + 2 - camera.position.y) * 0.05;
+            camera.lookAt(0, 0, 0);
+
+            composer.render();
+        }
+
+        // --- TIMELINE STORY (GSAP) ---
+        function runStory() {
+            const tl = gsap.timeline();
+            
+            // Scene 1
+            tl.to("#canvas-container", { opacity: 1, duration: 2 })
+              .to("#slide1", { opacity: 1, y: 0, duration: 1.5, ease: "power2.out" })
+              .to("#slide1", { opacity: 0, scale: 1.1, filter: "blur(10px)", duration: 1.5, delay: 2.5 })
+            
+            // Scene 2
+              .to("#slide2", { opacity: 1, y: 0, duration: 1.5 })
+              .to("#slide2", { opacity: 0, y: -20, filter: "blur(10px)", duration: 1.5, delay: 3 })
+
+            // Scene 3
+              .to("#slide3", { opacity: 1, scale: 1, duration: 1.5 })
+              .to("#imgCard", { opacity: 1, scale: 1, duration: 2, ease: "back.out(1.7)" }, "-=1")
+            
+            // Camera Zoom Effect
+            gsap.to(camera.position, { z: 8, duration: 12, ease: "sine.inOut" });
+        }
+
+        // --- START HANDLER ---
+        const startScreen = document.getElementById('start-screen');
+        const startBtn = document.querySelector('.start-btn');
+
+        startBtn.addEventListener('click', () => {
+            startScreen.style.opacity = 0;
+            setTimeout(() => {
+                startScreen.style.display = 'none';
+                animate(); // Bắt đầu render
+                runStory(); // Bắt đầu kịch bản
+                
+                // Play Music (Optional) - Nếu bạn muốn thêm nhạc
+                // const audio = new Audio('link_mp3_o_day');
+                // audio.play();
+            }, 1000);
+        });
+
+        // Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
